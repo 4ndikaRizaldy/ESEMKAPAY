@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Database,
@@ -13,9 +13,13 @@ import {
   Table,
   HelpCircle,
   RefreshCw,
+  Lock,
+  Unlock,
+  ShieldCheck,
 } from 'lucide-react';
 import { CODE_GS_SCRIPT, CODE_GS_SETUP_STEPS } from '../data/codeGsContent';
 import { SheetsConfig } from '../types';
+import { SheetsService } from '../services/sheetsService';
 
 interface SheetsIntegrationModalProps {
   isOpen: boolean;
@@ -33,10 +37,16 @@ export const SheetsIntegrationModal: React.FC<SheetsIntegrationModalProps> = ({
   onResetDemo,
 }) => {
   const [activeTab, setActiveTab] = useState<'GUIDE' | 'CODE' | 'SCHEMA'>('GUIDE');
-  const [webAppUrl, setWebAppUrl] = useState(config.webAppUrl || '');
+  const [webAppUrl, setWebAppUrl] = useState(config.webAppUrl || config.masterUrl || '');
+  const [isLocked, setIsLocked] = useState(config.isLocked || false);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    setWebAppUrl(config.webAppUrl || config.masterUrl || '');
+    setIsLocked(config.isLocked || false);
+  }, [config]);
 
   if (!isOpen) return null;
 
@@ -56,6 +66,18 @@ export const SheetsIntegrationModal: React.FC<SheetsIntegrationModalProps> = ({
     document.body.removeChild(element);
   };
 
+  const handleToggleLock = () => {
+    const nextLocked = !isLocked;
+    setIsLocked(nextLocked);
+    SheetsService.setLockStatus(nextLocked, webAppUrl);
+    setMessage({
+      type: 'success',
+      text: nextLocked
+        ? '🔒 Link berhasil dikunci! Endpoint tunggal ini dilindungi dan tidak akan mudah berubah.'
+        : '🔓 Kunci link dibuka. Anda sekarang dapat mengubah URL Apps Script.',
+    });
+  };
+
   const handleSubmitUrl = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!webAppUrl.trim()) {
@@ -67,10 +89,16 @@ export const SheetsIntegrationModal: React.FC<SheetsIntegrationModalProps> = ({
     setMessage(null);
 
     const result = await onSaveConfig(webAppUrl.trim());
+    if (isLocked) {
+      SheetsService.setLockStatus(true, webAppUrl.trim());
+    }
     setLoading(false);
 
     if (result.success) {
-      setMessage({ type: 'success', text: result.message });
+      setMessage({
+        type: 'success',
+        text: result.message + (isLocked ? ' (Status Link: Terkunci Permanen)' : ''),
+      });
     } else {
       setMessage({ type: 'error', text: result.message });
     }
@@ -113,36 +141,103 @@ export const SheetsIntegrationModal: React.FC<SheetsIntegrationModalProps> = ({
 
         {/* Form Web App URL Input */}
         <div className="p-6 bg-slate-950/60 border-b border-slate-800">
-          <form onSubmit={handleSubmitUrl} className="space-y-3">
-            <label className="block text-xs font-semibold text-slate-300">
-              URL Aplikasi Web Google Apps Script (Web App URL)
-            </label>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                type="url"
-                value={webAppUrl}
-                onChange={(e) => setWebAppUrl(e.target.value)}
-                placeholder="https://script.google.com/macros/s/AKfycb.../exec"
-                className="flex-1 px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
-              />
+          <form onSubmit={handleSubmitUrl} className="space-y-3.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-300 flex items-center gap-2">
+                URL Aplikasi Web Google Apps Script (Endpoint Tunggal)
+                {isLocked && (
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-emerald-400" /> LINK TERKUNCI PERMANEN
+                  </span>
+                )}
+              </label>
+
               <button
-                type="submit"
-                disabled={loading}
-                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-semibold transition flex items-center justify-center space-x-2 shadow-lg shadow-emerald-600/20 disabled:opacity-50"
+                type="button"
+                onClick={handleToggleLock}
+                className={`text-xs px-3 py-1 rounded-lg border font-semibold flex items-center gap-1.5 transition ${
+                  isLocked
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20'
+                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                }`}
               >
-                {loading ? (
+                {isLocked ? (
                   <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Menguji...</span>
+                    <Unlock className="w-3.5 h-3.5" />
+                    <span>Buka Kunci Pengaturan</span>
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Uji & Hubungkan</span>
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>Kunci Link Tunggal Ini</span>
                   </>
                 )}
               </button>
             </div>
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="url"
+                  value={webAppUrl}
+                  onChange={(e) => setWebAppUrl(e.target.value)}
+                  disabled={isLocked}
+                  placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+                  className={`w-full px-4 py-2.5 bg-slate-900 border rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none transition ${
+                    isLocked
+                      ? 'border-emerald-500/50 bg-slate-900/80 cursor-not-allowed text-emerald-300 font-mono text-xs'
+                      : 'border-slate-700 focus:border-emerald-500'
+                  }`}
+                />
+                {isLocked && (
+                  <div className="absolute right-3 top-2.5 text-emerald-400" title="Link Terkunci">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                )}
+              </div>
+
+              {!isLocked && (
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-semibold transition flex items-center justify-center space-x-2 shadow-lg shadow-emerald-600/20 disabled:opacity-50"
+                >
+                  {loading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Menguji...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Uji & Hubungkan</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+
+            {/* Locked Helper Info Banner */}
+            {isLocked ? (
+              <div className="p-3 bg-emerald-950/40 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 flex items-start gap-2.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <p className="leading-relaxed">
+                  <strong>Mode Link Tunggal Aktif:</strong> Link Google Apps Script ini dikunci secara permanen sebagai endpoint utama database. Link ini tidak akan mudah berganti atau hilang saat berpindah tab/sesi.
+                </p>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isLocked}
+                    onChange={(e) => setIsLocked(e.target.checked)}
+                    className="rounded border-slate-700 bg-slate-900 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span>Otomatis kunci link setelah tersambung agar tidak mudah terubah</span>
+                </label>
+              </div>
+            )}
 
             {message && (
               <div

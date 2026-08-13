@@ -53,6 +53,8 @@ export interface SheetsConfig {
   isConnected: boolean;
   lastSyncTime?: string;
   autoSync: boolean;
+  isLocked?: boolean;
+  masterUrl?: string;
 }
 
 export interface BankOrEwallet {

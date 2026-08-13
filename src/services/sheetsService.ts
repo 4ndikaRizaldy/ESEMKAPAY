@@ -10,6 +10,8 @@ export class SheetsService {
     webAppUrl: '',
     isConnected: false,
     autoSync: true,
+    isLocked: false,
+    masterUrl: '',
   };
 
   /**
@@ -19,7 +21,12 @@ export class SheetsService {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_CONFIG);
       if (saved) {
-        this.config = JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        this.config = {
+          ...parsed,
+          // If locked and masterUrl exists, enforce masterUrl as webAppUrl
+          webAppUrl: parsed.isLocked && parsed.masterUrl ? parsed.masterUrl : parsed.webAppUrl,
+        };
       }
     } catch (e) {
       console.error('Error loading config:', e);
@@ -31,9 +38,30 @@ export class SheetsService {
    * Save Sheets Web App URL config
    */
   static saveConfig(newConfig: Partial<SheetsConfig>): SheetsConfig {
-    this.config = { ...this.getConfig(), ...newConfig };
+    const current = this.getConfig();
+    // If locked and user attempts to change webAppUrl without explicitly unlocking, preserve masterUrl
+    if (current.isLocked && newConfig.webAppUrl && newConfig.webAppUrl !== current.masterUrl && !newConfig.isLocked && newConfig.isLocked !== false) {
+      newConfig.webAppUrl = current.masterUrl || current.webAppUrl;
+    }
+    this.config = { ...current, ...newConfig };
+    if (this.config.isLocked && this.config.webAppUrl) {
+      this.config.masterUrl = this.config.webAppUrl;
+    }
     localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(this.config));
     return this.config;
+  }
+
+  /**
+   * Toggle URL lock status
+   */
+  static setLockStatus(locked: boolean, url?: string): SheetsConfig {
+    const current = this.getConfig();
+    const targetUrl = url || current.webAppUrl || current.masterUrl || '';
+    return this.saveConfig({
+      isLocked: locked,
+      webAppUrl: targetUrl,
+      masterUrl: targetUrl,
+    });
   }
 
   /**
