@@ -1,0 +1,6 @@
+{
+  "name": "Aplikasi Pembayaran Digital",
+  "description": "Aplikasi pembayaran digital berbasis React, TypeScript, dan Tailwind CSS terintegrasi dengan Google Sheets sebagai backend database utama via Google Apps Script (Code.gs).",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
